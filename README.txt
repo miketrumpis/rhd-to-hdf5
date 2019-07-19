@@ -1,5 +1,16 @@
 Combine and convert packetized Intan RHD files into continuous arrays in HDF5 format.
-   
+
+Install:
+
+$ git clone https://github.com/miketrumpis/rhd-to-hdf5.git
+$ pip install rhd-to-hdf5
+
+Get Usage Help:
+
+$ convert_rhd.py -h
+
+Output Notes:
+
 Arrays in the output file may include:
 * amplifier_data: converted to signed int16, scale to uV by multiplying 0.195
 * aux_input_data: unsigned uint16, scale by 37.4e-6 for Volts (sampled at 1/4 rate as amplifier data)
