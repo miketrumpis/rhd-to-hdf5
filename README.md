@@ -2,12 +2,16 @@
 
 ## Install:
 
+Requires python3 (e.g. [miniconda](https://docs.conda.io/en/latest/miniconda.html) or [pyenv](https://github.com/pyenv/pyenv)) and pip.
+
 *Do this step with conda or pyenv environment activated if applicable*
 
 ```bash
 $ git clone https://github.com/miketrumpis/rhd-to-hdf5.git
 $ pip install rhd-to-hdf5
 ```
+
+Pip install also pulls in [numpy](https://www.numpy.org) and [h5py](https://www.h5py.org/).
 
 ## Get Usage Help:
 
