@@ -268,6 +268,70 @@ def read_one_data_block(data, header, indices, fid):
         tmp = np.array(struct.unpack('<' + 'H' * num_samples, fid.read(2 * num_samples)))
         data['board_dig_out_raw'][indices['board_dig_out']:(indices['board_dig_out'] + num_samples)] = tmp
 
+class slice_tracker:
+
+    def __init__(self, file_idx, hdf_idx):
+        self.file_idx = file_idx
+        self.hdf_idx = hdf_idx
+        self.slices = dict()
+        # self.updated = set()
+
+    def slice_from_key(self, key):
+        start = self.hdf_idx[key]
+        stop = start + self.file_idx[key]
+        sl = np.s_[start:stop]
+        self.hdf_idx[key] = stop
+        return sl
+
+    def get(self, key, matrix=True):
+        if key in self.slices:
+            sl = self.slices[key]
+        else:
+            sl = self.slice_from_key(key)
+            self.slices[key] = sl
+        if matrix:
+            return (slice(None), sl)
+        return sl
+
+
+def write_file_data(header, file_data, file_indices, hdf_data, hdf_indices):
+    """
+    Transfers the file data to hdf output. Updates the hdf_indices.
+
+    """
+    slice_lookup = slice_tracker(file_indices, hdf_indices)
+
+    amp_slice = slice_lookup.get('amplifier', matrix=False)
+    hdf_data['t_amplifier'][amp_slice] = file_data['t_amplifier']
+
+    if header['num_amplifier_channels'] > 0:
+        amp_slice = slice_lookup.get('amplifier', matrix=True)
+        hdf_data['amplifier_data'][amp_slice] = file_data['amplifier_data']
+
+    if header['num_aux_input_channels'] > 0:
+        aux_slice = slice_lookup.get('aux_input', matrix=True)
+        hdf_data['aux_input_data'][aux_slice] = file_data['aux_input_data']
+
+    if header['num_supply_voltage_channels'] > 0:
+        v_slice = slice_lookup.get('supply_voltage', matrix=True)
+        hdf_data['supply_voltage_data'][v_slice] = file_data['supply_voltage_data']
+
+    if header['num_temp_sensor_channels'] > 0:
+        v_slice = slice_lookup.get('supply_voltage', matrix=True)
+        hdf_data['temp_sensor_data'][v_slice] = file_data['temp_sensor_data']
+
+    if header['num_board_adc_channels'] > 0:
+        adc_slice = slice_lookup.get('board_adc', matrix=True)
+        hdf_data['board_adc_data'][adc_slice] = file_data['board_adc_data']
+
+    if header['num_board_dig_in_channels'] > 0:
+        dig_in_slice = slice_lookup.get('board_dig_in', matrix=False)
+        hdf_data['board_dig_in_raw'][dig_in_slice] = file_data['board_dig_in_raw']
+
+    if header['num_board_dig_out_channels'] > 0:
+        dig_out_slice = slice_lookup.get('board_dig_out', matrix=False)
+        hdf_data['board_dig_out_raw'][dig_out_slice] = file_data['board_dig_out_raw']
+
 
 def convert(filenames, outfile):
 
@@ -374,7 +438,7 @@ def convert(filenames, outfile):
                                 shape=(n_dig_out_channels, sum(num_dig_out_samples)),
                                 dtype=np.bool,
                                 chunks=True)
-            data.create_dataset('board_dig_out_raw', shape=(sum(num_dig_out_samples),), dtype=np.uint, chunks=True)
+            data.create_dataset('board_dig_out_raw', shape=(sum(num_dig_out_samples),), dtype=np.uint16, chunks=True)
 
         indices = dict()
         indices['amplifier'] = 0
@@ -390,20 +454,58 @@ def convert(filenames, outfile):
             file_size = os.path.getsize(filename)
             print('File {} ({}/{})'.format(filename, n + 1, len(filenames)))
 
+            tmpdata = {}
+            if (header['version']['major'] == 1 and header['version']['minor'] >= 2) or (
+                    header['version']['major'] > 1):
+                tmpdata['t_amplifier'] = np.zeros(num_amplifier_samples[n], dtype=np.int32)
+            else:
+                tmpdata['t_amplifier'] = np.zeros(num_amplifier_samples[n], dtype=np.uint32)
+
+            tmpdata['amplifier_data'] = np.zeros((header['num_amplifier_channels'], num_amplifier_samples[n]),
+                                                 dtype=np.int16)
+            tmpdata['aux_input_data'] = np.zeros((header['num_aux_input_channels'], num_aux_samples[n]),
+                                                 dtype=np.uint16)
+            tmpdata['supply_voltage_data'] = np.zeros((header['num_supply_voltage_channels'],
+                                                       num_supply_voltage_samples[n]), dtype=np.uint16)
+            tmpdata['temp_sensor_data'] = np.zeros((header['num_temp_sensor_channels'], num_supply_voltage_samples[n]),
+                                                   dtype=np.uint16)
+            tmpdata['board_adc_data'] = np.zeros((header['num_board_adc_channels'], num_adc_samples[n]),
+                                                  dtype=np.int16)
+
+            # by default, this script interprets digital events (digital inputs and outputs) as booleans
+            # if unsigned int values are preferred(0 for False, 1 for True), replace the 'dtype=np.bool' argument with 'dtype=np.uint' as shown
+            # the commented line below illustrates this for digital input data; the same can be done for digital out
+
+            # data['board_dig_in_data'] = np.zeros([header['num_board_dig_in_channels'], num_board_dig_in_samples], dtype=np.uint)
+            tmpdata['board_dig_in_data'] = np.zeros((header['num_board_dig_in_channels'], num_dig_in_samples[n]),
+                                                    dtype=np.bool)
+            tmpdata['board_dig_in_raw'] = np.zeros(num_dig_in_samples[n], dtype=np.uint16)
+
+            tmpdata['board_dig_out_data'] = np.zeros((header['num_board_dig_out_channels'],
+                                                      num_dig_out_samples[n]), dtype=np.bool)
+            tmpdata['board_dig_out_raw'] = np.zeros(num_dig_out_samples[n], dtype=np.uint16)
+            tmpindices = dict()
+            tmpindices['amplifier'] = 0
+            tmpindices['aux_input'] = 0
+            tmpindices['supply_voltage'] = 0
+            tmpindices['board_adc'] = 0
+            tmpindices['board_dig_in'] = 0
+            tmpindices['board_dig_out'] = 0
+
             print_increment = 10
             percent_done = print_increment
             with open(filename, 'rb') as fid:
                 header = read_header(fid)
                 for i in range(num_blocks):
-                    read_one_data_block(data, header, indices, fid)
+                    read_one_data_block(tmpdata, header, tmpindices, fid)
 
                     # Increment indices
-                    indices['amplifier'] += header['num_samples_per_data_block']
-                    indices['aux_input'] += int(header['num_samples_per_data_block'] / 4)
-                    indices['supply_voltage'] += 1
-                    indices['board_adc'] += header['num_samples_per_data_block']
-                    indices['board_dig_in'] += header['num_samples_per_data_block']
-                    indices['board_dig_out'] += header['num_samples_per_data_block']
+                    tmpindices['amplifier'] += header['num_samples_per_data_block']
+                    tmpindices['aux_input'] += int(header['num_samples_per_data_block'] / 4)
+                    tmpindices['supply_voltage'] += 1
+                    tmpindices['board_adc'] += header['num_samples_per_data_block']
+                    tmpindices['board_dig_in'] += header['num_samples_per_data_block']
+                    tmpindices['board_dig_out'] += header['num_samples_per_data_block']
 
                     fraction_done = 100 * (1.0 * i / num_blocks)
                     if fraction_done >= percent_done:
@@ -415,6 +517,7 @@ def convert(filenames, outfile):
                 if bytes_remaining != 0:
                     raise Exception('Error: End of file not reached.')
 
+            write_file_data(header, tmpdata, tmpindices, data, indices)
         data.attrs['JSON_header'] = json.dumps(header)
     print('Done: {}'.format(outfile))
 
