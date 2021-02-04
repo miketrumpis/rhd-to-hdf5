@@ -5,5 +5,6 @@ if __name__=='__main__':
         name = 'rhd_to_hdf5',
         version = '0.1',
         scripts=['convert_rhd.py'],
+        packages=['rhdlib'],
         install_requires=['numpy', 'h5py']
     )
