@@ -5,7 +5,8 @@ import sys
 import json
 import numpy as np
 import h5py
-from rhdlib.rhd_reader import RHDFile
+import logging
+from rhdlib.rhd_reader import RHDFile, signed_arrays
 
 
 def convert(filenames, outfile):
@@ -20,6 +21,8 @@ def convert(filenames, outfile):
         Output path for the HDF5 file
 
     """
+    info = logging.getLogger().info
+    info('Creating RHD file maps')
     rhd_files = [RHDFile(f) for f in filenames]
     with h5py.File(outfile, 'w') as data:
         first_file = rhd_files[0]
@@ -27,10 +30,14 @@ def convert(filenames, outfile):
         hdf_arrays = dict()
         hdf_offsets = dict()
         for name, shape in arrays:
-            dtype = first_file.rhd_map[name].dtype
+            if name in signed_arrays:
+                dtype = 'h'
+            else:
+                dtype = first_file.rhd_map[name].dtype
             num_channels = shape[0]
             all_samples = np.sum([rhd.array_sizes[name][1] for rhd in rhd_files])
             shape = (num_channels, all_samples) if num_channels > 1 else (all_samples,)
+            info('dataset name {}, dtype {}, shape {}'.format(name, dtype, shape))
             arr = data.create_dataset(name, dtype=dtype, shape=shape, chunks=True)
             hdf_arrays[name] = arr
             hdf_offsets[name] = 0
@@ -38,7 +45,9 @@ def convert(filenames, outfile):
         for n, rhd in enumerate(rhd_files):
             print('Converting {} ({} of {})'.format(rhd.file_path, n, len(rhd_files)))
             rhd.to_arrays(arrays=hdf_arrays, offsets=hdf_offsets, apply_scales=False)
+            info('Offsets: {}'.format(list(hdf_offsets.items())))
         data.attrs['JSON_header'] = json.dumps(first_file.header)
+        info('End of conversion')
     print('Done: {}'.format(outfile))
 
 
@@ -85,12 +94,20 @@ if __name__ == '__main__':
                     default='out')
     ap.add_argument('-i', '--input-files', type=str, nargs='+', help='Input RHD files in order')
     ap.add_argument('-d', '--input-dir', type=str, help='Input directory: RHD files will be converted in sorted order')
+    ap.add_argument('-v', '--verbose', action='store_true', help='Turn on logging channel')
     args = ap.parse_args()
     if args.doc:
         with open('README.txt', 'w') as fw:
             fw.write(app_description)
         sys.exit(0)
-
+    if args.verbose:
+        root = logging.getLogger()
+        root.setLevel(logging.INFO)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        root.addHandler(handler)
     if args.input_files is not None and len(args.input_files):
         input_files = args.input_files
     elif args.input_dir is not None and len(args.input_dir):
