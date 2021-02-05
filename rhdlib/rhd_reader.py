@@ -65,7 +65,7 @@ class RHDFile:
         self.array_sizes = dict([(name, (c, b * num_blocks)) for name, (c, b) in self.struct_map])
         self.rhd_map = np.memmap(self.file_path, dtype=np.dtype(dtype_code), offset=self.header_bytes, mode='r')
 
-    def to_arrays(self, arrays=dict(), offsets=dict(), apply_scales=False):
+    def to_arrays(self, arrays=dict(), offsets=dict(), apply_scales=False, scaled_type='d'):
         """
         Read from the memory map and append to existing arrays (with offsets), or create new arrays.
 
@@ -87,10 +87,10 @@ class RHDFile:
             total_samples = blocks * block_samps
             scale = scales.get(name, 1) if apply_scales else 1
             if name in signed_arrays:
-                dtype = 'd' if apply_scales else 'h'
+                dtype = scaled_type if apply_scales else 'h'
                 mem_arr = (map_arr.reshape(blocks, chans, block_samps) - 32768).astype(dtype)
             else:
-                dtype = 'd' if apply_scales else 'H'
+                dtype = scaled_type if apply_scales else 'H'
                 mem_arr = map_arr.reshape(blocks, chans, block_samps).astype(dtype, copy=False)
             if scale != 1:
                 mem_arr *= scale
