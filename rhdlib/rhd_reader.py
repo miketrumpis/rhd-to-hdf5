@@ -65,7 +65,7 @@ class RHDFile:
         self.array_sizes = dict([(name, (c, b * num_blocks)) for name, (c, b) in self.struct_map])
         self.rhd_map = np.memmap(self.file_path, dtype=np.dtype(dtype_code), offset=self.header_bytes, mode='r')
 
-    def to_arrays(self, arrays=None, offsets=None, apply_scales=False, scaled_type='d'):
+    def to_arrays(self, arrays=None, offsets=None, apply_scales=False, scaled_type='d', extract='all'):
         """
         Read from the memory map and append to existing arrays (with offsets), or create new arrays.
 
@@ -84,7 +84,14 @@ class RHDFile:
             arrays = dict()
         if offsets is None:
             offsets = dict()
-        for name, shape in self.struct_map:
+        if isinstance(extract, str):
+            if extract == 'all':
+                structs = self.struct_map
+            else:
+                extract = (extract,)
+        if extract:
+            structs = [s for s in self.struct_map if s[0] in extract]
+        for name, shape in structs:
             map_arr = self.rhd_map[name]
             blocks = map_arr.shape[0]
             chans, block_samps = shape
