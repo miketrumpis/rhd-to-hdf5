@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import struct
+import logging
 import numpy as np
 
 
@@ -86,11 +87,12 @@ class RHDFile:
             offsets = dict()
         if isinstance(extract, str):
             if extract == 'all':
-                structs = self.struct_map
+                extract = [s[0] for s in self.struct_map]
             else:
                 extract = (extract,)
         if extract:
             structs = [s for s in self.struct_map if s[0] in extract]
+        info = logging.getLogger().info
         for name, shape in structs:
             map_arr = self.rhd_map[name]
             blocks = map_arr.shape[0]
@@ -111,6 +113,7 @@ class RHDFile:
                 sl = np.s_[offset:offset + total_samples]
                 if chans > 1:
                     sl = (slice(None), sl)
+                info('Array {} slice {}'.format(name, sl))
                 arrays[name][sl] = mem_arr.transpose(1, 0, 2).reshape(chans, total_samples).squeeze()
                 offsets[name] = offset + total_samples
             else:

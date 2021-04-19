@@ -43,7 +43,7 @@ def convert(filenames, outfile):
             hdf_offsets[name] = 0
 
         for n, rhd in enumerate(rhd_files):
-            print('Converting {} ({} of {})'.format(rhd.file_path, n, len(rhd_files)))
+            print('Converting {} ({} of {})'.format(rhd.file_path, n + 1, len(rhd_files)))
             rhd.to_arrays(arrays=hdf_arrays, offsets=hdf_offsets, apply_scales=False)
             info('Offsets: {}'.format(list(hdf_offsets.items())))
         data.attrs['JSON_header'] = json.dumps(first_file.header)
